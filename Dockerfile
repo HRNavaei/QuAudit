@@ -1,0 +1,32 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+RUN apk add --no-cache openssl python3 make g++
+
+COPY package*.json ./
+RUN npm ci
+
+COPY prisma ./prisma/
+RUN npx prisma generate
+
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS production
+
+WORKDIR /app
+
+RUN apk add --no-cache openssl python3 make g++ libstdc++
+
+COPY package*.json ./
+RUN npm ci --only=production
+
+COPY prisma ./prisma/
+RUN npx prisma generate
+
+COPY --from=builder /app/dist ./dist
+
+EXPOSE 3000
+
+CMD ["sh", "-c", "npx prisma migrate deploy && node prisma/seed.js && node dist/main"]

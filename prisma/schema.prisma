@@ -1,0 +1,219 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  SUPERVISOR
+  SUPPLIER
+}
+
+enum QuestionnaireStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum QuestionType {
+  TEXT
+  YES_NO
+  SINGLE_CHOICE
+  NUMBER
+}
+
+enum AssignmentStatus {
+  PENDING
+  IN_PROGRESS
+  SUBMITTED
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @unique
+  password  String
+  firstName String   @map("first_name")
+  lastName  String   @map("last_name")
+  role      Role     @default(SUPPLIER)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  supplier              Supplier?
+  sentNotifications     Notification[] @relation("SentNotifications")
+  receivedNotifications Notification[] @relation("ReceivedNotifications")
+
+  @@map("users")
+}
+
+model Supplier {
+  id          String   @id @default(uuid()) @db.Uuid
+  companyName String   @map("company_name")
+  description String?
+  address     String?
+  phone       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  userId String @unique @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  products    Product[]
+  assignments QuestionnaireAssignment[]
+
+  @@map("suppliers")
+}
+
+model Product {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  category    String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  supplierId String   @map("supplier_id") @db.Uuid
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  assignments QuestionnaireAssignment[]
+
+  @@index([supplierId])
+  @@map("products")
+}
+
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  title     String
+  message   String
+  type      String   @default("INFO")
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  senderId   String @map("sender_id") @db.Uuid
+  sender     User   @relation("SentNotifications", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String @map("receiver_id") @db.Uuid
+  receiver   User   @relation("ReceivedNotifications", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([receiverId, isRead])
+  @@index([senderId])
+  @@map("notifications")
+}
+
+model Questionnaire {
+  id          String               @id @default(uuid()) @db.Uuid
+  title       String
+  description String?
+  status      QuestionnaireStatus  @default(DRAFT)
+  version     Int                  @default(1)
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+
+  parentId String?        @map("parent_id") @db.Uuid
+  parent   Questionnaire? @relation("QuestionnaireVersions", fields: [parentId], references: [id])
+  versions Questionnaire[] @relation("QuestionnaireVersions")
+
+  createdById String @map("created_by_id") @db.Uuid
+
+  questions   Question[]
+  assignments QuestionnaireAssignment[]
+
+  @@index([status])
+  @@index([createdById])
+  @@map("questionnaires")
+}
+
+model Question {
+  id           String       @id @default(uuid()) @db.Uuid
+  text         String
+  type         QuestionType
+  isRequired   Boolean      @default(true) @map("is_required")
+  order        Int          @default(0)
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  questionnaireId String        @map("questionnaire_id") @db.Uuid
+  questionnaire   Questionnaire @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+
+  options          QuestionOption[]
+  answers          Answer[]
+  // Follow-up: this question can be a follow-up target of many QuestionOptions
+  followUpFromOptions QuestionOption[] @relation("FollowUpQuestion")
+
+  @@index([questionnaireId, order])
+  @@map("questions")
+}
+
+model QuestionOption {
+  id        String   @id @default(uuid()) @db.Uuid
+  label     String
+  value     String
+  order     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  questionId String   @map("question_id") @db.Uuid
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  // Follow-up question that should be shown when this option is selected
+  followUpQuestionId String?   @map("follow_up_question_id") @db.Uuid
+  followUpQuestion   Question? @relation("FollowUpQuestion", fields: [followUpQuestionId], references: [id], onDelete: SetNull)
+
+  answers Answer[]
+
+  @@index([questionId, order])
+  @@map("question_options")
+}
+
+model QuestionnaireAssignment {
+  id        String           @id @default(uuid()) @db.Uuid
+  status    AssignmentStatus @default(PENDING)
+  assignedAt DateTime        @default(now()) @map("assigned_at")
+  submittedAt DateTime?      @map("submitted_at")
+  createdAt  DateTime        @default(now()) @map("created_at")
+  updatedAt  DateTime        @updatedAt @map("updated_at")
+
+  questionnaireId String        @map("questionnaire_id") @db.Uuid
+  questionnaire   Questionnaire @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+
+  supplierId String   @map("supplier_id") @db.Uuid
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  productId String?  @map("product_id") @db.Uuid
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  answers Answer[]
+
+  @@index([supplierId])
+  @@index([questionnaireId])
+  @@index([productId])
+  @@map("questionnaire_assignments")
+}
+
+model Answer {
+  id        String   @id @default(uuid()) @db.Uuid
+  textValue String?  @map("text_value")
+  numberValue Float? @map("number_value")
+  booleanValue Boolean? @map("boolean_value")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  assignmentId String                  @map("assignment_id") @db.Uuid
+  assignment   QuestionnaireAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  questionId String   @map("question_id") @db.Uuid
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  selectedOptionId String?         @map("selected_option_id") @db.Uuid
+  selectedOption   QuestionOption? @relation(fields: [selectedOptionId], references: [id], onDelete: SetNull)
+
+  @@index([assignmentId])
+  @@index([questionId])
+  @@map("answers")
+}
