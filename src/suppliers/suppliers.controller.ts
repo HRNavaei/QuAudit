@@ -78,11 +78,11 @@ export class SuppliersController {
   }
 
   @Get("pending")
-  @Roles(Role.SUPERVISOR)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @ApiOperation({
     summary: "List pending supplier registrations",
     description:
-      "Retrieves all supplier profiles awaiting supervisor approval. Accessible exclusively to SUPERVISOR role.",
+      "Retrieves all supplier profiles awaiting supervisor approval. Accessible to SUPERVISOR and ADMIN roles.",
   })
   @ApiResponse({
     status: 200,
@@ -96,7 +96,7 @@ export class SuppliersController {
   @ApiResponse({
     status: 403,
     description:
-      "Forbidden - Only SUPERVISOR role can retrieve pending supplier registrations",
+      "Forbidden - Only SUPERVISOR and ADMIN roles can retrieve pending supplier registrations",
   })
   async findPending() {
     return this.suppliersService.getPendingSuppliers();
@@ -129,11 +129,11 @@ export class SuppliersController {
   }
 
   @Patch(":id/approve")
-  @Roles(Role.SUPERVISOR)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @ApiOperation({
     summary: "Approve pending supplier registration",
     description:
-      "Approves a pending supplier account. Once approved, the supplier can access supplier functionality. Accessible exclusively to SUPERVISOR role.",
+      "Approves a pending supplier account. Once approved, the supplier can access supplier functionality. Accessible to SUPERVISOR and ADMIN roles.",
   })
   @ApiParam({
     name: "id",
