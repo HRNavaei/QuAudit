@@ -21,12 +21,15 @@ export class AssignmentsService {
   ) {}
 
   async createAssignment(dto: CreateAssignmentDto, creatorId: string) {
-    // 1. Verify questionnaire exists
+    // 1. Verify questionnaire exists and is published
     const questionnaire = await this.prisma.questionnaire.findUnique({
       where: { id: dto.questionnaireId },
     });
     if (!questionnaire) {
       throw new NotFoundException(`Questionnaire with ID ${dto.questionnaireId} not found`);
+    }
+    if (questionnaire.status !== QuestionnaireStatus.PUBLISHED) {
+      throw new BadRequestException("Only PUBLISHED questionnaires can be assigned to suppliers");
     }
 
     // 2. Verify supplier exists
@@ -277,11 +280,71 @@ export class AssignmentsService {
         });
       }
 
+      // Clean up orphaned answers on inactive/hidden branches
+      const allAssignmentAnswers = await tx.answer.findMany({ where: { assignmentId } });
+      const visibleIds = this.getVisibleQuestionIds(assignment.questionnaire.questions, allAssignmentAnswers);
+      const toDelete = allAssignmentAnswers.filter((a) => !visibleIds.has(a.questionId));
+      if (toDelete.length > 0) {
+        await tx.answer.deleteMany({
+          where: { id: { in: toDelete.map((a) => a.id) } },
+        });
+      }
+
       return tx.answer.findMany({
         where: { assignmentId },
         include: { question: true, selectedOption: true },
       });
     });
+  }
+
+  private getVisibleQuestionIds(
+    questions: any[],
+    answers: { questionId: string; selectedOptionId?: string | null }[],
+  ): Set<string> {
+    const incomingTargets = new Set<string>();
+    for (const q of questions) {
+      for (const opt of q.options || []) {
+        if (opt.followUpQuestionId) {
+          incomingTargets.add(opt.followUpQuestionId);
+        }
+      }
+    }
+
+    const answerMap = new Map<string, string | undefined | null>();
+    for (const ans of answers) {
+      answerMap.set(ans.questionId, ans.selectedOptionId);
+    }
+
+    const activeTriggeredIds = new Set<string>();
+
+    const activateFollowUps = (questionId: string) => {
+      const q = questions.find((item) => item.id === questionId);
+      if (!q) return;
+
+      const selectedOptionId = answerMap.get(questionId);
+      if (selectedOptionId && q.options) {
+        const selectedOpt = q.options.find((o: any) => o.id === selectedOptionId);
+        if (selectedOpt?.followUpQuestionId) {
+          activeTriggeredIds.add(selectedOpt.followUpQuestionId);
+          activateFollowUps(selectedOpt.followUpQuestionId);
+        }
+      }
+    };
+
+    for (const q of questions) {
+      if (!incomingTargets.has(q.id)) {
+        activateFollowUps(q.id);
+      }
+    }
+
+    const visibleIds = new Set<string>();
+    for (const q of questions) {
+      if (!incomingTargets.has(q.id) || activeTriggeredIds.has(q.id)) {
+        visibleIds.add(q.id);
+      }
+    }
+
+    return visibleIds;
   }
 
   async submitAssignment(assignmentId: string, user: RequestUser) {
@@ -291,14 +354,29 @@ export class AssignmentsService {
       throw new BadRequestException("Assignment has already been submitted");
     }
 
-    // Verify required questions have answers
+    // Verify required questions have answers among visible questions
     const answers = await this.prisma.answer.findMany({
       where: { assignmentId },
     });
-    const answeredQuestionIds = new Set(answers.map((a) => a.questionId));
+    const answeredQuestionIds = new Set(
+      answers
+        .filter((a) => {
+          if (a.selectedOptionId) return true;
+          if (a.numberValue !== null && a.numberValue !== undefined) return true;
+          if (a.textValue !== null && a.textValue !== undefined && a.textValue.trim().length > 0) return true;
+          if (a.booleanValue !== null && a.booleanValue !== undefined) return true;
+          return false;
+        })
+        .map((a) => a.questionId),
+    );
+
+    const visibleQuestionIds = this.getVisibleQuestionIds(
+      assignment.questionnaire.questions,
+      answers,
+    );
 
     const missingRequired = assignment.questionnaire.questions.filter(
-      (q) => q.isRequired && !answeredQuestionIds.has(q.id),
+      (q) => q.isRequired && visibleQuestionIds.has(q.id) && !answeredQuestionIds.has(q.id),
     );
 
     if (missingRequired.length > 0) {

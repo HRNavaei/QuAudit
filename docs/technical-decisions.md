@@ -6,19 +6,19 @@
 
 **Rationale:** The ER diagram explicitly shows only User–Supplier as a 1:0..1 relationship. There is no Supervisor entity in the diagram. The simplest correct design is to use the User table with a role enum.
 
-## TD-002: Multiple Choice Answer Normalization
+## TD-002: Question Types and Answer Normalization
 
-**Decision:** For MULTIPLE_CHOICE questions, each selected option produces a separate `Answer` row (one per selected QuestionOption). This provides proper normalization and allows FK-based validation per option.
+**Decision:** The system strictly supports four question types: `TEXT`, `YES_NO`, `SINGLE_CHOICE`, and `NUMBER`. `MULTIPLE_CHOICE` is excluded from the initial scope to preserve 1:1 question-answer cardinality. Each Answer record maps to exactly one Question within an Assignment, optionally referencing one selected QuestionOption via `selectedOptionId`.
 
-**Rationale:** The requirement explicitly says "Do not store multiple selected option IDs as an unvalidated comma-separated string." A normalized approach with one Answer per selection allows database-level FK constraints.
+**Rationale:** This design enforces database-level referential integrity without requiring an auxiliary AnswerOption junction entity.
 
-**Uniqueness:** For non-MULTIPLE_CHOICE questions, a unique constraint on (assignmentId, questionId) prevents duplicate answers. For MULTIPLE_CHOICE, uniqueness is on (assignmentId, questionId, selectedOptionId).
+**Uniqueness:** A unique constraint on `(assignment_id, question_id)` guarantees at most one answer per question within an assignment.
 
 ## TD-003: Questionnaire Versioning Strategy
 
-**Decision:** Questionnaires have a `status` field: DRAFT → PUBLISHED → ARCHIVED. Once PUBLISHED and responses exist, the questionnaire becomes immutable (no structural edits). To modify, the supervisor must create a new questionnaire (effectively a new version). We add a `version` field and optional `parentId` for lineage tracking.
+**Decision:** Questionnaires follow the lifecycle `DRAFT` → `PUBLISHED` → `ARCHIVED`. Questionnaires are versioned using an integer `version` field (default 1) incremented upon cloning via `POST /api/questionnaires/:id/versions`, adhering strictly to the agreed 9-entity ER diagram without unnecessary self-referencing relationship overhead.
 
-**Rationale:** Modifying published questionnaires with existing responses would corrupt response integrity. This is the simplest strategy that preserves data integrity without complex versioning infrastructure.
+**Rationale:** Modifying published questionnaires with existing responses would compromise audit integrity. Cloning into an incremented version preserves historical audits while enabling iterative questionnaire authoring.
 
 ## TD-004: Response Editability Policy
 

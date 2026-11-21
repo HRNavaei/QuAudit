@@ -289,6 +289,12 @@ export class QuestionnairesService {
       if (!followUp) {
         throw new BadRequestException("Follow-up question must belong to the same questionnaire");
       }
+
+      await this.validateNoCircularDependency(
+        questionnaireId,
+        questionId,
+        dto.followUpQuestionId,
+      );
     }
 
     return this.prisma.questionOption.create({
@@ -322,6 +328,13 @@ export class QuestionnairesService {
       if (!followUp) {
         throw new BadRequestException("Follow-up question must belong to the same questionnaire");
       }
+
+      await this.validateNoCircularDependency(
+        questionnaireId,
+        questionId,
+        dto.followUpQuestionId,
+        optionId,
+      );
     }
 
     return this.prisma.questionOption.update({
@@ -348,5 +361,51 @@ export class QuestionnairesService {
     return this.prisma.questionOption.delete({
       where: { id: optionId },
     });
+  }
+
+  private async validateNoCircularDependency(
+    questionnaireId: string,
+    sourceQuestionId: string,
+    targetQuestionId: string,
+    excludedOptionId?: string,
+  ) {
+    if (sourceQuestionId === targetQuestionId) {
+      throw new BadRequestException("A question cannot have itself as a follow-up question");
+    }
+
+    const allQuestions = await this.prisma.question.findMany({
+      where: { questionnaireId },
+      include: { options: true },
+    });
+
+    const adj = new Map<string, string[]>();
+    for (const q of allQuestions) {
+      adj.set(q.id, []);
+      for (const opt of q.options) {
+        if (opt.id !== excludedOptionId && opt.followUpQuestionId) {
+          adj.get(q.id)!.push(opt.followUpQuestionId);
+        }
+      }
+    }
+
+    // Add proposed edge: sourceQuestionId -> targetQuestionId
+    adj.get(sourceQuestionId)?.push(targetQuestionId);
+
+    // Check if targetQuestionId can reach sourceQuestionId
+    const visited = new Set<string>();
+    const stack = [targetQuestionId];
+    while (stack.length > 0) {
+      const curr = stack.pop()!;
+      if (curr === sourceQuestionId) {
+        throw new BadRequestException("Circular follow-up question dependency detected");
+      }
+      if (!visited.has(curr)) {
+        visited.add(curr);
+        const neighbors = adj.get(curr) || [];
+        for (const n of neighbors) {
+          stack.push(n);
+        }
+      }
+    }
   }
 }
