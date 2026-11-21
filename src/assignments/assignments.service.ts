@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { NotificationsService } from "../notifications/notifications.service";
+import { AiService } from "../ai/ai.service";
 import { CreateAssignmentDto } from "./dto/create-assignment.dto";
 import { UpdateAssignmentStatusDto } from "./dto/update-assignment-status.dto";
 import { SaveAnswersDto } from "./dto/save-answers.dto";
@@ -18,6 +19,7 @@ export class AssignmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly aiService: AiService,
   ) {}
 
   async createAssignment(dto: CreateAssignmentDto, creatorId: string) {
@@ -496,5 +498,91 @@ export class AssignmentsService {
       totalSubmissions: assignments.length,
       submissions: assignments,
     };
+  }
+
+  // --- AI Supplier Assessment ---
+
+  async generateAiAssessment(id: string, user: RequestUser) {
+    if (user.role !== Role.ADMIN && user.role !== Role.SUPERVISOR) {
+      throw new ForbiddenException(
+        "Only SUPERVISOR and ADMIN roles can request AI assessments",
+      );
+    }
+
+    const assignment = await this.prisma.questionnaireAssignment.findUnique({
+      where: { id },
+      include: {
+        questionnaire: {
+          include: {
+            questions: {
+              orderBy: { order: "asc" },
+              include: {
+                options: { orderBy: { order: "asc" } },
+              },
+            },
+          },
+        },
+        supplier: {
+          select: { id: true, companyName: true },
+        },
+        product: {
+          select: { id: true, name: true, category: true },
+        },
+        answers: {
+          where: { assignmentId: id },
+          include: {
+            question: true,
+            selectedOption: true,
+          },
+        },
+      },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException(`Assignment with ID ${id} not found`);
+    }
+
+    if (assignment.status !== AssignmentStatus.SUBMITTED) {
+      throw new BadRequestException(
+        `AI assessment can only be generated for submitted assignments. Current status is ${assignment.status}`,
+      );
+    }
+
+    const answerMap = new Map<string, any>(
+      assignment.answers.map((a) => [a.questionId, a]),
+    );
+
+    const questionsAndAnswers = assignment.questionnaire.questions.map((q) => {
+      const ans = answerMap.get(q.id);
+      let answerStr: string | null = null;
+      if (ans) {
+        if (ans.selectedOption) {
+          answerStr = `${ans.selectedOption.label} (${ans.selectedOption.value})`;
+        } else if (ans.booleanValue !== null && ans.booleanValue !== undefined) {
+          answerStr = ans.booleanValue ? "Yes" : "No";
+        } else if (ans.numberValue !== null && ans.numberValue !== undefined) {
+          answerStr = String(ans.numberValue);
+        } else if (ans.textValue !== null && ans.textValue !== undefined) {
+          answerStr = ans.textValue;
+        }
+      }
+
+      return {
+        questionOrder: q.order,
+        questionText: q.text,
+        questionType: q.type,
+        isRequired: q.isRequired,
+        answer: answerStr,
+      };
+    });
+
+    return this.aiService.assessSupplierSubmission({
+      questionnaireTitle: assignment.questionnaire.title,
+      questionnaireDescription: assignment.questionnaire.description,
+      supplierCompanyName: assignment.supplier.companyName,
+      productName: assignment.product?.name,
+      productCategory: assignment.product?.category,
+      questionsAndAnswers,
+    });
   }
 }

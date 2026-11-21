@@ -57,6 +57,8 @@ The application has three distinct user roles (`Role` enum):
 5. **Audit Response Inspector (`/questionnaires/:id/responses` or `/assignments/:id`):**
    - Calls `GET /api/assignments/questionnaire/:id/responses`.
    - Displays submitted answers, supplier details, and product info.
+   - Button to **Request AI Assessment** (`POST /api/assignments/:id/ai-assessment`):
+     - Displays an indicative compliance card with score (0-100), rating label, summary, concerns, recommendations, and standard disclaimer.
    - Button to **Re-open Assignment** (`POST /api/assignments/:id/reopen`) if revision is requested.
 6. **Suppliers & Products Directory (`/suppliers`, `/products`):**
    - View supplier profiles and product catalogs.
@@ -105,3 +107,27 @@ The application has three distinct user roles (`Role` enum):
    - UI switches to read-only review mode with a banner: *"Submitted on [date]. Answers are locked."*
 3. **Re-opened Audits:**
    - If an Admin/Supervisor re-opens the assignment (`POST /api/assignments/:id/reopen`), status reverts to `IN_PROGRESS` and the supplier can edit and resubmit answers.
+
+### C. AI Supplier Assessment
+- **Endpoint:** `POST /api/assignments/:id/ai-assessment`
+- **Access:** Only `ADMIN` and `SUPERVISOR` roles.
+- **Pre-requisite:** Assignment must be in `SUBMITTED` status.
+- **Response Format:**
+  ```json
+  {
+    "score": 82,
+    "label": "Good",
+    "summary": "The supplier demonstrates generally good compliance with documented quality procedures.",
+    "concerns": [
+      "Quality-control procedures are insufficiently documented."
+    ],
+    "recommendations": [
+      "Establish and publish documented quality-control standard operating procedures."
+    ],
+    "disclaimer": "This is an AI-generated assessment and should not be treated as a verified compliance rating."
+  }
+  ```
+- **Error Handling:**
+  - `400 Bad Request`: If assignment is still `PENDING` or `IN_PROGRESS`.
+  - `502 Bad Gateway`: If AI provider times out or returns malformed response.
+  - `503 Service Unavailable`: If `AI_API_KEY` is not configured on the backend.

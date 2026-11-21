@@ -31,6 +31,7 @@ import {
   AssignmentResponseDto,
   AnswerResponseDto,
 } from "./dto/assignment-response.dto";
+import { AiAssessmentResponseDto } from "../ai/dto/ai-assessment-response.dto";
 
 @ApiTags("Assignments & Responses")
 @ApiBearerAuth()
@@ -233,5 +234,34 @@ export class AssignmentsController {
   @ApiResponse({ status: 200, description: "Assignment deleted successfully" })
   async remove(@Param("id", new ParseUUIDPipe()) id: string) {
     return this.assignmentsService.deleteAssignment(id);
+  }
+
+  @Post(":id/ai-assessment")
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @ApiOperation({
+    summary: "Generate AI assessment for a submitted assignment",
+    description:
+      "Analyzes submitted questionnaire answers using AI and returns an indicative score (0-100), rating label, concise summary, concerns, and recommendations. Requires the assignment to be in SUBMITTED status. Only ADMIN and SUPERVISOR.",
+  })
+  @ApiParam({ name: "id", description: "Submitted assignment UUID" })
+  @ApiResponse({
+    status: 200,
+    description: "AI assessment generated successfully",
+    type: AiAssessmentResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Assignment is not in SUBMITTED status",
+  })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  @ApiResponse({ status: 403, description: "Forbidden - only ADMIN and SUPERVISOR" })
+  @ApiResponse({ status: 404, description: "Assignment not found" })
+  @ApiResponse({ status: 502, description: "Bad Gateway - AI provider error or malformed response" })
+  @ApiResponse({ status: 503, description: "Service Unavailable - AI service is not configured" })
+  async generateAiAssessment(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<AiAssessmentResponseDto> {
+    return this.assignmentsService.generateAiAssessment(id, user);
   }
 }
