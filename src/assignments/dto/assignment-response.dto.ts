@@ -78,7 +78,6 @@ export class AssignmentResponseDto {
   questionnaire?: {
     id: string;
     title: string;
-    version: number;
     status: string;
   };
 

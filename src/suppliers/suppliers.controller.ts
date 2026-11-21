@@ -36,31 +36,14 @@ export class SuppliersController {
   @Post()
   @Roles(Role.ADMIN, Role.SUPERVISOR, Role.SUPPLIER)
   @ApiOperation({
-    summary: "Create supplier profile",
+    summary: "Create supplier profile (Deprecated)",
     description:
-      "Creates a new supplier profile. For SUPPLIER role users, profile automatically binds to their authenticated user account. ADMIN and SUPERVISOR can provide a target userId in the request body.",
+      "Manual supplier profile creation is disabled. Suppliers must self-register via POST /api/auth/register.",
   })
   @ApiResponse({
-    status: 201,
-    description: "Supplier profile created successfully",
-    type: SupplierResponseDto,
-  })
-  @ApiResponse({
-    status: 400,
-    description: "Validation error in request payload",
-  })
-  @ApiResponse({
-    status: 401,
-    description: "Unauthorized - missing or invalid JWT token",
-  })
-  @ApiResponse({
-    status: 404,
-    description: "Target user not found (when specified by admin)",
-  })
-  @ApiResponse({
-    status: 409,
+    status: 403,
     description:
-      "Conflict - User already has a supplier profile (1:0..1 cardinality violated)",
+      "Forbidden - Manual creation is disabled. Suppliers must self-register.",
   })
   async create(
     @Body() dto: CreateSupplierDto,
@@ -94,6 +77,31 @@ export class SuppliersController {
     return this.suppliersService.findAll();
   }
 
+  @Get("pending")
+  @Roles(Role.SUPERVISOR)
+  @ApiOperation({
+    summary: "List pending supplier registrations",
+    description:
+      "Retrieves all supplier profiles awaiting supervisor approval. Accessible exclusively to SUPERVISOR role.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "List of pending supplier registrations",
+    type: [SupplierResponseDto],
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Unauthorized - missing or invalid JWT token",
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      "Forbidden - Only SUPERVISOR role can retrieve pending supplier registrations",
+  })
+  async findPending() {
+    return this.suppliersService.getPendingSuppliers();
+  }
+
   // NOTE: 'me' route MUST precede ':id' to prevent route matching collisions
   @Get("me")
   @Roles(Role.ADMIN, Role.SUPERVISOR, Role.SUPPLIER)
@@ -118,6 +126,44 @@ export class SuppliersController {
   })
   async getMyProfile(@CurrentUser() user: RequestUser) {
     return this.suppliersService.findMyProfile(user);
+  }
+
+  @Patch(":id/approve")
+  @Roles(Role.SUPERVISOR)
+  @ApiOperation({
+    summary: "Approve pending supplier registration",
+    description:
+      "Approves a pending supplier account. Once approved, the supplier can access supplier functionality. Accessible exclusively to SUPERVISOR role.",
+  })
+  @ApiParam({
+    name: "id",
+    description: "Supplier UUID to approve",
+    format: "uuid",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Supplier approved successfully",
+    type: SupplierResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Bad Request - Supplier is already approved",
+  })
+  @ApiResponse({
+    status: 401,
+    description: "Unauthorized - missing or invalid JWT token",
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      "Forbidden - Only SUPERVISOR role can approve supplier registrations",
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Supplier not found",
+  })
+  async approve(@Param("id", ParseUUIDPipe) id: string) {
+    return this.suppliersService.approveSupplier(id);
   }
 
   @Get(":id")

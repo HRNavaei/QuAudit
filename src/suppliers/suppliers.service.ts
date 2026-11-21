@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
   ConflictException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
@@ -23,54 +24,44 @@ export class SuppliersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateSupplierDto, currentUser: RequestUser) {
-    const targetUserId =
-      currentUser.role === Role.SUPPLIER
-        ? currentUser.userId
-        : dto.userId || currentUser.userId;
+    throw new ForbiddenException(
+      "Manual supplier creation is disabled. Suppliers must self-register via /api/auth/register.",
+    );
+  }
 
-    // Verify target user exists
-    const targetUser = await this.prisma.user.findUnique({
-      where: { id: targetUserId },
+  async getPendingSuppliers() {
+    return this.prisma.supplier.findMany({
+      where: { isApproved: false },
+      include: {
+        user: { select: USER_SELECT_FIELDS },
+      },
+      orderBy: { createdAt: "asc" },
     });
-    if (!targetUser) {
-      throw new NotFoundException(`User with ID ${targetUserId} not found`);
-    }
+  }
 
-    // Check 1:0..1 cardinality: ensure user does not already have a supplier profile
-    const existing = await this.prisma.supplier.findUnique({
-      where: { userId: targetUserId },
+  async approveSupplier(id: string) {
+    const supplier = await this.prisma.supplier.findUnique({
+      where: { id },
+      include: {
+        user: { select: USER_SELECT_FIELDS },
+      },
     });
-    if (existing) {
-      throw new ConflictException(
-        "Supplier profile already exists for this user",
-      );
+
+    if (!supplier) {
+      throw new NotFoundException(`Supplier with ID ${id} not found`);
     }
 
-    try {
-      return await this.prisma.supplier.create({
-        data: {
-          companyName: dto.companyName,
-          description: dto.description,
-          address: dto.address,
-          phone: dto.phone,
-          userId: targetUserId,
-        },
-        include: {
-          user: { select: USER_SELECT_FIELDS },
-        },
-      });
-    } catch (error: any) {
-      if (
-        (error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === "P2002") ||
-        error?.code === "P2002"
-      ) {
-        throw new ConflictException(
-          "Supplier profile already exists for this user",
-        );
-      }
-      throw error;
+    if (supplier.isApproved) {
+      throw new BadRequestException("Supplier is already approved");
     }
+
+    return this.prisma.supplier.update({
+      where: { id },
+      data: { isApproved: true },
+      include: {
+        user: { select: USER_SELECT_FIELDS },
+      },
+    });
   }
 
   async findAll() {

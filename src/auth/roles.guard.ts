@@ -1,6 +1,12 @@
-import { Injectable, CanActivate, ExecutionContext } from "@nestjs/common";
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { ROLES_KEY } from "./roles.decorator";
+import { Role } from "@prisma/client";
 import { Observable } from "rxjs";
 
 @Injectable()
@@ -20,6 +26,14 @@ export class RolesGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request.user; // set by JwtStrategy.validate
     if (!user) return false;
+
+    // Enforce approval for SUPPLIER accounts on protected role-based endpoints
+    if (user.role === Role.SUPPLIER && user.isApproved === false) {
+      throw new ForbiddenException(
+        "Supplier account is pending supervisor approval",
+      );
+    }
+
     return requiredRoles.includes(user.role);
   }
 }

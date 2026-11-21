@@ -66,9 +66,6 @@ export class QuestionnaireResponseDto {
   @ApiProperty({ enum: QuestionnaireStatus, example: QuestionnaireStatus.DRAFT })
   status!: QuestionnaireStatus;
 
-  @ApiProperty({ example: 1 })
-  version!: number;
-
   @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440004" })
   createdById!: string;
 

@@ -5,7 +5,7 @@
   "database": "PostgreSQL 16",
   "enums": {
     "Role": ["ADMIN", "SUPERVISOR", "SUPPLIER"],
-    "QuestionnaireStatus": ["DRAFT", "PUBLISHED", "ARCHIVED"],
+    "QuestionnaireStatus": ["DRAFT", "ASSIGNED"],
     "QuestionType": ["TEXT", "YES_NO", "SINGLE_CHOICE", "NUMBER"],
     "AssignmentStatus": ["PENDING", "IN_PROGRESS", "SUBMITTED"]
   },
@@ -34,6 +34,7 @@
         "description": { "type": "Text", "nullable": true },
         "address": { "type": "String", "nullable": true },
         "phone": { "type": "String", "nullable": true },
+        "isApproved": { "type": "Boolean", "columnName": "is_approved", "nullable": false, "default": false },
         "userId": {
           "type": "UUID",
           "columnName": "user_id",
@@ -96,10 +97,9 @@
       "description": "Assessment or audit template with questions",
       "attributes": {
         "id": { "type": "UUID", "isPrimaryKey": true, "nullable": false, "default": "uuid()" },
-        "title": { "type": "String", "nullable": false },
+        "title": { "type": "String", "nullable": false, "isUnique": true },
         "description": { "type": "Text", "nullable": true },
         "status": { "type": "Enum(QuestionnaireStatus)", "nullable": false, "default": "DRAFT" },
-        "version": { "type": "Integer", "nullable": false, "default": 1 },
         "createdById": {
           "type": "UUID",
           "columnName": "created_by_id",
@@ -109,7 +109,13 @@
         },
         "createdAt": { "type": "Timestamp", "columnName": "created_at", "nullable": false, "default": "now()" },
         "updatedAt": { "type": "Timestamp", "columnName": "updated_at", "nullable": false, "autoUpdate": true }
-      }
+      },
+      "uniqueConstraints": [
+        {
+          "name": "questionnaires_title_key",
+          "columns": ["title"]
+        }
+      ]
     },
     "Question": {
       "tableName": "questions",

@@ -66,13 +66,13 @@ export class QuestionnairesController {
   @ApiOperation({
     summary: "List questionnaires",
     description:
-      "Lists questionnaires. ADMIN/SUPERVISOR can view all questionnaires; SUPPLIER can only view published or assigned questionnaires.",
+      "Lists questionnaires. ADMIN/SUPERVISOR can view all questionnaires; SUPPLIER can only view assigned questionnaires.",
   })
   @ApiQuery({
     name: "status",
     enum: QuestionnaireStatus,
     required: false,
-    description: "Filter by questionnaire status (DRAFT, PUBLISHED, ARCHIVED)",
+    description: "Filter by questionnaire status (DRAFT, ASSIGNED)",
   })
   @ApiResponse({
     status: 200,
@@ -140,25 +140,26 @@ export class QuestionnairesController {
     return this.questionnairesService.deleteQuestionnaire(id);
   }
 
-  @Post(":id/versions")
+  @Post(":id/clone")
   @Roles(Role.ADMIN, Role.SUPERVISOR)
   @ApiOperation({
-    summary: "Create a new version of questionnaire",
+    summary: "Clone an assigned questionnaire",
     description:
-      "Clones the questionnaire and its questions/options into a new DRAFT questionnaire with incremented version number.",
+      "Clones an assigned questionnaire into a new independent DRAFT questionnaire with all questions, options, and conditional logic. Generates a unique title with an incrementing suffix (1), (2), etc.",
   })
-  @ApiParam({ name: "id", description: "Parent questionnaire UUID" })
+  @ApiParam({ name: "id", description: "Source questionnaire UUID" })
   @ApiResponse({
     status: 201,
-    description: "New questionnaire version created",
+    description: "Questionnaire cloned successfully",
     type: QuestionnaireResponseDto,
   })
-  @ApiResponse({ status: 404, description: "Parent questionnaire not found" })
-  async createVersion(
+  @ApiResponse({ status: 400, description: "Only assigned questionnaires can be cloned" })
+  @ApiResponse({ status: 404, description: "Source questionnaire not found" })
+  async clone(
     @Param("id", new ParseUUIDPipe()) id: string,
     @CurrentUser() user: RequestUser,
   ) {
-    return this.questionnairesService.createVersion(id, user.userId);
+    return this.questionnairesService.cloneQuestionnaire(id, user.userId);
   }
 
   // --- Questions Endpoints ---

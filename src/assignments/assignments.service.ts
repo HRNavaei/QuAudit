@@ -23,15 +23,21 @@ export class AssignmentsService {
   ) {}
 
   async createAssignment(dto: CreateAssignmentDto, creatorId: string) {
-    // 1. Verify questionnaire exists and is published
+    // 1. Verify questionnaire exists and has at least one question
     const questionnaire = await this.prisma.questionnaire.findUnique({
       where: { id: dto.questionnaireId },
+      include: {
+        questions: { select: { id: true } },
+      },
     });
     if (!questionnaire) {
       throw new NotFoundException(`Questionnaire with ID ${dto.questionnaireId} not found`);
     }
-    if (questionnaire.status !== QuestionnaireStatus.PUBLISHED) {
-      throw new BadRequestException("Only PUBLISHED questionnaires can be assigned to suppliers");
+
+    if (!questionnaire.questions || questionnaire.questions.length === 0) {
+      throw new BadRequestException(
+        "Cannot assign a questionnaire that has no questions. Please add at least one question first.",
+      );
     }
 
     // 2. Verify supplier exists
@@ -69,25 +75,34 @@ export class AssignmentsService {
       );
     }
 
-    // 5. Create assignment
-    const assignment = await this.prisma.questionnaireAssignment.create({
-      data: {
-        questionnaireId: dto.questionnaireId,
-        supplierId: dto.supplierId,
-        productId: dto.productId || null,
-        status: AssignmentStatus.PENDING,
-      },
-      include: {
-        questionnaire: {
-          select: { id: true, title: true, version: true, status: true },
+    // 5. Create assignment and transition DRAFT to ASSIGNED if first assignment
+    const assignment = await this.prisma.$transaction(async (tx) => {
+      if (questionnaire.status === QuestionnaireStatus.DRAFT) {
+        await tx.questionnaire.update({
+          where: { id: questionnaire.id },
+          data: { status: QuestionnaireStatus.ASSIGNED },
+        });
+      }
+
+      return tx.questionnaireAssignment.create({
+        data: {
+          questionnaireId: dto.questionnaireId,
+          supplierId: dto.supplierId,
+          productId: dto.productId || null,
+          status: AssignmentStatus.PENDING,
         },
-        supplier: {
-          select: { id: true, companyName: true, userId: true },
+        include: {
+          questionnaire: {
+            select: { id: true, title: true, status: true },
+          },
+          supplier: {
+            select: { id: true, companyName: true, userId: true },
+          },
+          product: {
+            select: { id: true, name: true, category: true },
+          },
         },
-        product: {
-          select: { id: true, name: true, category: true },
-        },
-      },
+      });
     });
 
     // 6. In-app notification to the supplier user
@@ -133,7 +148,7 @@ export class AssignmentsService {
       where,
       include: {
         questionnaire: {
-          select: { id: true, title: true, version: true, status: true },
+          select: { id: true, title: true, status: true },
         },
         supplier: {
           select: { id: true, companyName: true, userId: true },
@@ -492,7 +507,6 @@ export class AssignmentsService {
       questionnaire: {
         id: questionnaire.id,
         title: questionnaire.title,
-        version: questionnaire.version,
         status: questionnaire.status,
       },
       totalSubmissions: assignments.length,

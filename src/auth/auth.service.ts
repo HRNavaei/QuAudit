@@ -7,6 +7,7 @@ import { JwtService } from "@nestjs/jwt";
 import { PrismaService } from "../prisma/prisma.service";
 import * as argon2 from "argon2";
 import { Role, User } from "@prisma/client";
+import { RegisterDto } from "./dto/register.dto";
 
 @Injectable()
 export class AuthService {
@@ -29,13 +30,7 @@ export class AuthService {
     };
   }
 
-  async register(data: {
-    email: string;
-    password: string;
-    firstName: string;
-    lastName: string;
-    role?: Role;
-  }) {
+  async register(data: RegisterDto) {
     const existing = await this.prisma.user.findUnique({
       where: { email: data.email },
     });
@@ -44,17 +39,54 @@ export class AuthService {
     }
 
     const hashed = await argon2.hash(data.password);
-    // Security enforcement: Public registration is strictly restricted to SUPPLIER role.
-    // ADMIN and SUPERVISOR roles cannot be registered through public registration endpoints.
-    const user = await this.prisma.user.create({
-      data: {
-        email: data.email,
-        password: hashed,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        role: Role.SUPPLIER,
-      },
+    const companyName =
+      data.companyName || `${data.firstName} ${data.lastName}`;
+
+    const { user, supplier } = await this.prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email: data.email,
+          password: hashed,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          role: Role.SUPPLIER,
+        },
+      });
+
+      const newSupplier = await tx.supplier.create({
+        data: {
+          companyName,
+          description: data.description || null,
+          phone: data.phone || null,
+          address: data.address || null,
+          userId: newUser.id,
+          isApproved: false,
+        },
+      });
+
+      return { user: newUser, supplier: newSupplier };
     });
-    return this.login(user);
+
+    const loginRes = await this.login(user);
+    return {
+      message:
+        "Supplier registered successfully. Account is pending supervisor approval.",
+      access_token: loginRes.access_token,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+      },
+      supplier: {
+        id: supplier.id,
+        companyName: supplier.companyName,
+        description: supplier.description,
+        phone: supplier.phone,
+        address: supplier.address,
+        isApproved: supplier.isApproved,
+      },
+    };
   }
 }

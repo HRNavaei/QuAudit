@@ -83,6 +83,7 @@ describe("Integrity Enhancements and Business Constraints Verification", () => {
       data: {
         userId: supplierUser1.id,
         companyName: "Acme Corp",
+        isApproved: true,
       },
     });
 
@@ -90,6 +91,7 @@ describe("Integrity Enhancements and Business Constraints Verification", () => {
       data: {
         userId: supplierUser2.id,
         companyName: "Beta Logistics",
+        isApproved: true,
       },
     });
 
@@ -110,7 +112,7 @@ describe("Integrity Enhancements and Business Constraints Verification", () => {
     questionnaire1 = await prisma.questionnaire.create({
       data: {
         title: "Quality Audit Q1",
-        status: QuestionnaireStatus.PUBLISHED,
+        status: QuestionnaireStatus.ASSIGNED,
         createdById: adminUser.id,
       },
     });
@@ -118,7 +120,7 @@ describe("Integrity Enhancements and Business Constraints Verification", () => {
     questionnaire2 = await prisma.questionnaire.create({
       data: {
         title: "Security Audit Q2",
-        status: QuestionnaireStatus.PUBLISHED,
+        status: QuestionnaireStatus.ASSIGNED,
         createdById: adminUser.id,
       },
     });

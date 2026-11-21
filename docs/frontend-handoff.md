@@ -29,8 +29,8 @@ The application has three distinct user roles (`Role` enum):
 | Role | Access Scope & Responsibilities |
 |---|---|
 | **ADMIN** | Full system administration. Can manage users, suppliers, products, questionnaires, assignments, view all submitted responses, and oversee audit data. |
-| **SUPERVISOR** | Operations & Audit Manager. Can create and version questionnaires, manage questions and conditional follow-up branching, assign questionnaires to suppliers/products, review submitted responses, and re-open assignments for revision. |
-| **SUPPLIER** | External Vendor Portal. Strictly isolated to their own company profile and products. Can view assigned questionnaires, answer questions interactively (with dynamic follow-up logic), submit final audits, and receive notifications. |
+| **SUPERVISOR** | Operations & Audit Manager. Can review and approve pending supplier registrations, create and clone questionnaires, manage questions and conditional follow-up branching, assign questionnaires to suppliers/products, review submitted responses, re-open assignments for revision, and request AI assessments. |
+| **SUPPLIER** | External Vendor Portal. Strictly isolated to their own company profile and products. Can register their account and company profile (pending supervisor approval). Once approved, can view assigned questionnaires, answer questions interactively (with dynamic follow-up logic), submit final audits, and receive notifications. |
 
 ---
 
@@ -38,29 +38,40 @@ The application has three distinct user roles (`Role` enum):
 
 ### A. Authentication & Onboarding
 1. **Login Page (`/login`):** Email and password input. Calls `POST /api/auth/login`, stores JWT token (localStorage or HTTP-only cookie), and calls `GET /api/users/me` to determine role and redirect.
-2. **Supplier Registration Page (`/register`):** Public registration (`POST /api/auth/register`). Automatically creates user with `SUPPLIER` role.
-3. **Supplier Profile Setup (`/supplier/profile`):** If a newly registered supplier has no supplier record, prompts them to fill `companyName`, `description`, `address`, and `phone` (`POST /api/suppliers`).
+2. **Supplier Self-Registration Page (`/register`):** Single-step public registration (`POST /api/auth/register`) submitting:
+   - Credentials: `email`, `password`, `firstName`, `lastName`
+   - Company details: `companyName`, optional `description`, `phone`, `address`
+   - Automatically creates both User and Supplier records with `isApproved = false`.
+   - Directs the user to a "Pending Supervisor Approval" banner/page.
+3. **Pending Approval State:** Pending suppliers attempting to access protected supplier endpoints receive `403 Forbidden` (`"Supplier account is pending supervisor approval"`). The UI should display a friendly waiting screen until a supervisor approves their registration.
 
-### B. Admin & Supervisor Views
-1. **Dashboard:** Overview of active questionnaires, total suppliers, and assignment progress (Pending, In Progress, Submitted).
-2. **Questionnaires Management (`/questionnaires`):**
-   - List questionnaires with filter by status (`DRAFT`, `PUBLISHED`, `ARCHIVED`).
-   - Create new questionnaire (`POST /api/questionnaires`).
-   - Clone questionnaire to a new version (`POST /api/questionnaires/:id/versions`).
-3. **Questionnaire Builder (`/questionnaires/:id/edit`):**
-   - Drag-and-drop or ordered list of questions.
-   - Question types: `TEXT`, `NUMBER`, `YES_NO`, `SINGLE_CHOICE`.
+### B. Supervisor & Admin Views
+1. **Dashboard:** Overview of active questionnaires, total suppliers, pending registrations needing approval, and assignment progress (Pending, In Progress, Submitted).
+2. **Pending Supplier Approvals (`/suppliers/pending` - Supervisor Only):**
+   - Retrieves list of pending supplier registrations via `GET /api/suppliers/pending`.
+   - Displays applicant information (Company Name, Contact Person, Email, Phone, Address, Description).
+   - Action: **Approve Registration** (`PATCH /api/suppliers/:id/approve`). Once approved, the supplier gains normal dashboard access.
+3. **Questionnaires Management (`/questionnaires`):**
+   - List questionnaires with filter by status (`DRAFT`, `ASSIGNED`).
+   - Create new questionnaire (`POST /api/questionnaires`) - starts in `DRAFT` status.
+   - Questionnaire names must be strictly unique across the system (enforced by backend validation and DB constraint).
+   - Once a questionnaire is assigned to at least one supplier, its status transitions to `ASSIGNED` and its content becomes **immutable** (cannot edit title, description, questions, options, or conditional branching).
+   - Action: **Clone Questionnaire** (`POST /api/questionnaires/:id/clone`) - Clones an `ASSIGNED` questionnaire into an independent new `DRAFT` questionnaire copying all questions, options, and conditional logic. Automatically generates a unique title by appending `(1)`, `(2)`, etc.
+4. **Questionnaire Builder (`/questionnaires/:id/edit` - DRAFT Only):**
+   - Editable only while in `DRAFT` status.
+   - Add/edit/delete questions: Types `TEXT`, `NUMBER`, `YES_NO`, `SINGLE_CHOICE`.
    - Option builder for `SINGLE_CHOICE`: Add options and configure conditional branching (`followUpQuestionId`).
-4. **Assignments Management (`/assignments`):**
+5. **Assignments Management (`/assignments`):**
    - Table of all questionnaire assignments with filter by questionnaire, supplier, product, or status.
    - Modal to create assignment: Select questionnaire, select supplier, optionally select supplier's product (`POST /api/assignments`).
-5. **Audit Response Inspector (`/questionnaires/:id/responses` or `/assignments/:id`):**
+   - Note: Questionnaire must contain at least 1 question before it can be assigned. First assignment automatically transitions status from `DRAFT` to `ASSIGNED`.
+6. **Audit Response Inspector (`/questionnaires/:id/responses` or `/assignments/:id`):**
    - Calls `GET /api/assignments/questionnaire/:id/responses`.
    - Displays submitted answers, supplier details, and product info.
    - Button to **Request AI Assessment** (`POST /api/assignments/:id/ai-assessment`):
      - Displays an indicative compliance card with score (0-100), rating label, summary, concerns, recommendations, and standard disclaimer.
    - Button to **Re-open Assignment** (`POST /api/assignments/:id/reopen`) if revision is requested.
-6. **Suppliers & Products Directory (`/suppliers`, `/products`):**
+7. **Suppliers & Products Directory (`/suppliers`, `/products`):**
    - View supplier profiles and product catalogs.
 
 ### C. Supplier Portal Views

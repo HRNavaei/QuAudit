@@ -56,6 +56,12 @@ export class SupplierResponseDto {
   phone?: string | null;
 
   @ApiProperty({
+    description: "Approval status of supplier registration by supervisor",
+    example: true,
+  })
+  isApproved!: boolean;
+
+  @ApiProperty({
     description: "UUID of the linked User account (1:0..1 cardinality)",
     example: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
     format: "uuid",
