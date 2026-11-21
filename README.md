@@ -33,9 +33,8 @@ docker compose up -d --build
 ```
 
 The stack automatically starts:
-1. `quaudit-db`: Primary PostgreSQL on port `5432`
-2. `quaudit-db-test`: Test PostgreSQL on port `5433`
-3. `quaudit-app`: NestJS application on port `3000` (auto-deploys Prisma migrations on startup)
+1. `quaudit-db`: PostgreSQL database on port `5432`
+2. `quaudit-app`: NestJS application on port `3000` (auto-deploys Prisma migrations & seeds admin on startup)
 
 Interactive Swagger API documentation:
 👉 **[http://localhost:3000/api/docs](http://localhost:3000/api/docs)**
