@@ -50,6 +50,7 @@ model User {
   supplier              Supplier?
   sentNotifications     Notification[] @relation("SentNotifications")
   receivedNotifications Notification[] @relation("ReceivedNotifications")
+  createdQuestionnaires Questionnaire[] @relation("QuestionnaireCreatedBy")
 
   @@map("users")
 }
@@ -121,6 +122,7 @@ model Questionnaire {
   versions Questionnaire[] @relation("QuestionnaireVersions")
 
   createdById String @map("created_by_id") @db.Uuid
+  createdBy   User   @relation("QuestionnaireCreatedBy", fields: [createdById], references: [id])
 
   questions   Question[]
   assignments QuestionnaireAssignment[]
@@ -186,7 +188,7 @@ model QuestionnaireAssignment {
   supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
   productId String?  @map("product_id") @db.Uuid
-  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   answers Answer[]
 
@@ -213,6 +215,7 @@ model Answer {
   selectedOptionId String?         @map("selected_option_id") @db.Uuid
   selectedOption   QuestionOption? @relation(fields: [selectedOptionId], references: [id], onDelete: SetNull)
 
+  @@unique([assignmentId, questionId])
   @@index([assignmentId])
   @@index([questionId])
   @@map("answers")
