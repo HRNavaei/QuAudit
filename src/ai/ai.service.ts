@@ -86,7 +86,15 @@ CRITICAL INSTRUCTIONS:
 7. Identify up to three (0 to 3) notable weaknesses, risks, or potentially concerning answers.
 8. Provide up to three (0 to 3) practical, actionable recommendations for improvement.
 9. Always include the standard disclaimer: "This is an AI-generated assessment and should not be treated as a verified compliance rating."
-10. Return ONLY a valid JSON object matching the required schema.`;
+10. Return ONLY a valid JSON object matching this exact schema:
+{
+  "score": 85,
+  "label": "Good",
+  "summary": "Concise evaluation summary...",
+  "concerns": ["Concern 1", "Concern 2"],
+  "recommendations": ["Recommendation 1", "Recommendation 2"],
+  "disclaimer": "This is an AI-generated assessment and should not be treated as a verified compliance rating."
+}`;
 
     const userPrompt = JSON.stringify({
       questionnaire: {
@@ -186,8 +194,19 @@ CRITICAL INSTRUCTIONS:
       );
     }
 
-    // Validate score (must be numeric, between 0 and 100)
-    const rawScore = Number(parsed.score);
+    // Extract score flexibly
+    let rawScoreValue =
+      parsed.score ??
+      parsed.indicativeScore ??
+      parsed.assessment?.score ??
+      parsed.rating?.score ??
+      parsed.complianceScore;
+
+    if (typeof rawScoreValue === "string") {
+      const match = rawScoreValue.match(/\d+(\.\d+)?/);
+      rawScoreValue = match ? match[0] : rawScoreValue;
+    }
+    const rawScore = Number(rawScoreValue);
     if (isNaN(rawScore)) {
       throw new BadGatewayException(
         "AI assessment response missing valid numeric score",
@@ -195,31 +214,40 @@ CRITICAL INSTRUCTIONS:
     }
     const score = Math.max(0, Math.min(100, Math.round(rawScore)));
 
-    // Validate label
+    // Extract label
+    const rawLabel =
+      parsed.label ?? parsed.indicativeLabel ?? parsed.rating ?? parsed.status;
     const label =
-      typeof parsed.label === "string" && parsed.label.trim().length > 0
-        ? parsed.label.trim()
+      typeof rawLabel === "string" && rawLabel.trim().length > 0
+        ? rawLabel.trim()
         : this.deriveLabelFromScore(score);
 
-    // Validate summary
+    // Extract summary
     const summary =
       typeof parsed.summary === "string" && parsed.summary.trim().length > 0
         ? parsed.summary.trim()
         : "Assessment generated based on submitted questionnaire answers.";
 
-    // Validate concerns (array of strings, max 3)
+    // Extract concerns / weaknesses (array of strings, max 3)
+    const rawConcerns =
+      parsed.concerns ??
+      parsed.notableWeaknesses ??
+      parsed.weaknesses ??
+      parsed.risks ??
+      [];
     let concerns: string[] = [];
-    if (Array.isArray(parsed.concerns)) {
-      concerns = parsed.concerns
+    if (Array.isArray(rawConcerns)) {
+      concerns = rawConcerns
         .filter((c: any) => typeof c === "string" && c.trim().length > 0)
         .map((c: string) => c.trim())
         .slice(0, 3);
     }
 
-    // Validate recommendations (array of strings, max 3)
+    // Extract recommendations (array of strings, max 3)
+    const rawRecs = parsed.recommendations ?? parsed.suggestions ?? [];
     let recommendations: string[] = [];
-    if (Array.isArray(parsed.recommendations)) {
-      recommendations = parsed.recommendations
+    if (Array.isArray(rawRecs)) {
+      recommendations = rawRecs
         .filter((r: any) => typeof r === "string" && r.trim().length > 0)
         .map((r: string) => r.trim())
         .slice(0, 3);
