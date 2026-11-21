@@ -145,7 +145,7 @@ export class QuestionnairesController {
   @ApiOperation({
     summary: "Create a new version of questionnaire",
     description:
-      "Clones the questionnaire and its questions/options into a new DRAFT questionnaire with incremented version number and parentId set.",
+      "Clones the questionnaire and its questions/options into a new DRAFT questionnaire with incremented version number.",
   })
   @ApiParam({ name: "id", description: "Parent questionnaire UUID" })
   @ApiResponse({

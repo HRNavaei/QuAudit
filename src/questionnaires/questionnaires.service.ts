@@ -163,7 +163,6 @@ export class QuestionnairesService {
           description: parent.description,
           status: QuestionnaireStatus.DRAFT,
           version: parent.version + 1,
-          parentId: parent.id,
           createdById,
         },
       });

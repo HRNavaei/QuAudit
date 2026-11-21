@@ -69,9 +69,6 @@ export class QuestionnaireResponseDto {
   @ApiProperty({ example: 1 })
   version!: number;
 
-  @ApiPropertyOptional({ example: null, nullable: true })
-  parentId!: string | null;
-
   @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440004" })
   createdById!: string;
 
