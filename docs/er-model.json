@@ -1,0 +1,379 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Supplier Monitoring & Questionnaire System ER Model",
+  "version": "1.0.0",
+  "database": "PostgreSQL 16",
+  "enums": {
+    "Role": ["ADMIN", "SUPERVISOR", "SUPPLIER"],
+    "QuestionnaireStatus": ["DRAFT", "PUBLISHED", "ARCHIVED"],
+    "QuestionType": ["TEXT", "YES_NO", "SINGLE_CHOICE", "NUMBER"],
+    "AssignmentStatus": ["PENDING", "IN_PROGRESS", "SUBMITTED"]
+  },
+  "entities": {
+    "User": {
+      "tableName": "users",
+      "description": "Represents system actors (Admins, Supervisors, Suppliers)",
+      "attributes": {
+        "id": { "type": "UUID", "isPrimaryKey": true, "nullable": false, "default": "uuid()" },
+        "email": { "type": "String", "isUnique": true, "nullable": false },
+        "password": { "type": "String", "nullable": false, "description": "Argon2 password hash" },
+        "firstName": { "type": "String", "columnName": "first_name", "nullable": false },
+        "lastName": { "type": "String", "columnName": "last_name", "nullable": false },
+        "role": { "type": "Enum(Role)", "nullable": false, "default": "SUPPLIER" },
+        "isActive": { "type": "Boolean", "columnName": "is_active", "nullable": false, "default": true },
+        "createdAt": { "type": "Timestamp", "columnName": "created_at", "nullable": false, "default": "now()" },
+        "updatedAt": { "type": "Timestamp", "columnName": "updated_at", "nullable": false, "autoUpdate": true }
+      }
+    },
+    "Supplier": {
+      "tableName": "suppliers",
+      "description": "External supplier profile",
+      "attributes": {
+        "id": { "type": "UUID", "isPrimaryKey": true, "nullable": false, "default": "uuid()" },
+        "companyName": { "type": "String", "columnName": "company_name", "nullable": false },
+        "description": { "type": "Text", "nullable": true },
+        "address": { "type": "String", "nullable": true },
+        "phone": { "type": "String", "nullable": true },
+        "userId": {
+          "type": "UUID",
+          "columnName": "user_id",
+          "isForeignKey": true,
+          "isUnique": true,
+          "nullable": false,
+          "references": { "entity": "User", "attribute": "id", "onDelete": "CASCADE" }
+        },
+        "createdAt": { "type": "Timestamp", "columnName": "created_at", "nullable": false, "default": "now()" },
+        "updatedAt": { "type": "Timestamp", "columnName": "updated_at", "nullable": false, "autoUpdate": true }
+      }
+    },
+    "Notification": {
+      "tableName": "notifications",
+      "description": "In-app system notifications",
+      "attributes": {
+        "id": { "type": "UUID", "isPrimaryKey": true, "nullable": false, "default": "uuid()" },
+        "title": { "type": "String", "nullable": false },
+        "message": { "type": "Text", "nullable": false },
+        "type": { "type": "String", "nullable": false, "default": "INFO" },
+        "isRead": { "type": "Boolean", "columnName": "is_read", "nullable": false, "default": false },
+        "senderId": {
+          "type": "UUID",
+          "columnName": "sender_id",
+          "isForeignKey": true,
+          "nullable": false,
+          "references": { "entity": "User", "attribute": "id", "onDelete": "CASCADE" }
+        },
+        "receiverId": {
+          "type": "UUID",
+          "columnName": "receiver_id",
+          "isForeignKey": true,
+          "nullable": false,
+          "references": { "entity": "User", "attribute": "id", "onDelete": "CASCADE" }
+        },
+        "createdAt": { "type": "Timestamp", "columnName": "created_at", "nullable": false, "default": "now()" }
+      }
+    },
+    "Product": {
+      "tableName": "products",
+      "description": "Product or service manufactured by a supplier",
+      "attributes": {
+        "id": { "type": "UUID", "isPrimaryKey": true, "nullable": false, "default": "uuid()" },
+        "name": { "type": "String", "nullable": false },
+        "description": { "type": "Text", "nullable": true },
+        "category": { "type": "String", "nullable": true },
+        "supplierId": {
+          "type": "UUID",
+          "columnName": "supplier_id",
+          "isForeignKey": true,
+          "nullable": false,
+          "references": { "entity": "Supplier", "attribute": "id", "onDelete": "CASCADE" }
+        },
+        "createdAt": { "type": "Timestamp", "columnName": "created_at", "nullable": false, "default": "now()" },
+        "updatedAt": { "type": "Timestamp", "columnName": "updated_at", "nullable": false, "autoUpdate": true }
+      }
+    },
+    "Questionnaire": {
+      "tableName": "questionnaires",
+      "description": "Assessment or audit template with questions",
+      "attributes": {
+        "id": { "type": "UUID", "isPrimaryKey": true, "nullable": false, "default": "uuid()" },
+        "title": { "type": "String", "nullable": false },
+        "description": { "type": "Text", "nullable": true },
+        "status": { "type": "Enum(QuestionnaireStatus)", "nullable": false, "default": "DRAFT" },
+        "version": { "type": "Integer", "nullable": false, "default": 1 },
+        "createdById": {
+          "type": "UUID",
+          "columnName": "created_by_id",
+          "isForeignKey": true,
+          "nullable": false,
+          "references": { "entity": "User", "attribute": "id", "onDelete": "RESTRICT" }
+        },
+        "createdAt": { "type": "Timestamp", "columnName": "created_at", "nullable": false, "default": "now()" },
+        "updatedAt": { "type": "Timestamp", "columnName": "updated_at", "nullable": false, "autoUpdate": true }
+      }
+    },
+    "Question": {
+      "tableName": "questions",
+      "description": "An audit question belonging to a questionnaire",
+      "attributes": {
+        "id": { "type": "UUID", "isPrimaryKey": true, "nullable": false, "default": "uuid()" },
+        "text": { "type": "Text", "nullable": false },
+        "type": { "type": "Enum(QuestionType)", "nullable": false },
+        "isRequired": { "type": "Boolean", "columnName": "is_required", "nullable": false, "default": true },
+        "order": { "type": "Integer", "nullable": false, "default": 0 },
+        "questionnaireId": {
+          "type": "UUID",
+          "columnName": "questionnaire_id",
+          "isForeignKey": true,
+          "nullable": false,
+          "references": { "entity": "Questionnaire", "attribute": "id", "onDelete": "CASCADE" }
+        },
+        "createdAt": { "type": "Timestamp", "columnName": "created_at", "nullable": false, "default": "now()" },
+        "updatedAt": { "type": "Timestamp", "columnName": "updated_at", "nullable": false, "autoUpdate": true }
+      }
+    },
+    "QuestionOption": {
+      "tableName": "question_options",
+      "description": "Predefined option for single-choice questions with conditional follow-up branching",
+      "attributes": {
+        "id": { "type": "UUID", "isPrimaryKey": true, "nullable": false, "default": "uuid()" },
+        "label": { "type": "String", "nullable": false },
+        "value": { "type": "String", "nullable": false },
+        "order": { "type": "Integer", "nullable": false, "default": 0 },
+        "questionId": {
+          "type": "UUID",
+          "columnName": "question_id",
+          "isForeignKey": true,
+          "nullable": false,
+          "references": { "entity": "Question", "attribute": "id", "onDelete": "CASCADE" }
+        },
+        "followUpQuestionId": {
+          "type": "UUID",
+          "columnName": "follow_up_question_id",
+          "isForeignKey": true,
+          "nullable": true,
+          "references": { "entity": "Question", "attribute": "id", "onDelete": "SET_NULL" },
+          "description": "Target follow-up question triggered when this option is selected"
+        },
+        "createdAt": { "type": "Timestamp", "columnName": "created_at", "nullable": false, "default": "now()" }
+      }
+    },
+    "QuestionnaireAssignment": {
+      "tableName": "questionnaire_assignments",
+      "description": "Assignment of a questionnaire to a supplier and optional product",
+      "attributes": {
+        "id": { "type": "UUID", "isPrimaryKey": true, "nullable": false, "default": "uuid()" },
+        "status": { "type": "Enum(AssignmentStatus)", "nullable": false, "default": "PENDING" },
+        "assignedAt": { "type": "Timestamp", "columnName": "assigned_at", "nullable": false, "default": "now()" },
+        "submittedAt": { "type": "Timestamp", "columnName": "submitted_at", "nullable": true },
+        "questionnaireId": {
+          "type": "UUID",
+          "columnName": "questionnaire_id",
+          "isForeignKey": true,
+          "nullable": false,
+          "references": { "entity": "Questionnaire", "attribute": "id", "onDelete": "CASCADE" }
+        },
+        "supplierId": {
+          "type": "UUID",
+          "columnName": "supplier_id",
+          "isForeignKey": true,
+          "nullable": false,
+          "references": { "entity": "Supplier", "attribute": "id", "onDelete": "CASCADE" }
+        },
+        "productId": {
+          "type": "UUID",
+          "columnName": "product_id",
+          "isForeignKey": true,
+          "nullable": true,
+          "references": { "entity": "Product", "attribute": "id", "onDelete": "RESTRICT" },
+          "description": "Optional product; NULL indicates an organizational / supplier-wide audit"
+        },
+        "createdAt": { "type": "Timestamp", "columnName": "created_at", "nullable": false, "default": "now()" },
+        "updatedAt": { "type": "Timestamp", "columnName": "updated_at", "nullable": false, "autoUpdate": true }
+      },
+      "uniqueConstraints": [
+        {
+          "name": "idx_assignment_unique_product",
+          "type": "PartialUniqueIndex",
+          "columns": ["questionnaire_id", "supplier_id", "product_id"],
+          "where": "product_id IS NOT NULL"
+        },
+        {
+          "name": "idx_assignment_unique_supplier",
+          "type": "PartialUniqueIndex",
+          "columns": ["questionnaire_id", "supplier_id"],
+          "where": "product_id IS NULL"
+        }
+      ]
+    },
+    "Answer": {
+      "tableName": "answers",
+      "description": "A response to a question within an assignment",
+      "attributes": {
+        "id": { "type": "UUID", "isPrimaryKey": true, "nullable": false, "default": "uuid()" },
+        "textValue": { "type": "Text", "columnName": "text_value", "nullable": true },
+        "numberValue": { "type": "Double", "columnName": "number_value", "nullable": true },
+        "booleanValue": { "type": "Boolean", "columnName": "boolean_value", "nullable": true },
+        "selectedOptionId": {
+          "type": "UUID",
+          "columnName": "selected_option_id",
+          "isForeignKey": true,
+          "nullable": true,
+          "references": { "entity": "QuestionOption", "attribute": "id", "onDelete": "SET_NULL" }
+        },
+        "assignmentId": {
+          "type": "UUID",
+          "columnName": "assignment_id",
+          "isForeignKey": true,
+          "nullable": false,
+          "references": { "entity": "QuestionnaireAssignment", "attribute": "id", "onDelete": "CASCADE" }
+        },
+        "questionId": {
+          "type": "UUID",
+          "columnName": "question_id",
+          "isForeignKey": true,
+          "nullable": false,
+          "references": { "entity": "Question", "attribute": "id", "onDelete": "CASCADE" }
+        },
+        "createdAt": { "type": "Timestamp", "columnName": "created_at", "nullable": false, "default": "now()" },
+        "updatedAt": { "type": "Timestamp", "columnName": "updated_at", "nullable": false, "autoUpdate": true }
+      },
+      "uniqueConstraints": [
+        {
+          "name": "answers_assignment_id_question_id_key",
+          "type": "UniqueConstraint",
+          "columns": ["assignment_id", "question_id"]
+        }
+      ]
+    }
+  },
+  "relationships": [
+    {
+      "source": "User",
+      "target": "Supplier",
+      "sourceCardinality": "0..1",
+      "targetCardinality": "1..1",
+      "foreignKey": "Supplier.userId"
+    },
+    {
+      "source": "User",
+      "target": "Notification",
+      "type": "SentNotifications",
+      "sourceCardinality": "0..*",
+      "targetCardinality": "1..1",
+      "foreignKey": "Notification.senderId"
+    },
+    {
+      "source": "User",
+      "target": "Notification",
+      "type": "ReceivedNotifications",
+      "sourceCardinality": "0..*",
+      "targetCardinality": "1..1",
+      "foreignKey": "Notification.receiverId"
+    },
+    {
+      "source": "User",
+      "target": "Questionnaire",
+      "type": "CreatedQuestionnaires",
+      "sourceCardinality": "0..*",
+      "targetCardinality": "1..1",
+      "foreignKey": "Questionnaire.createdById"
+    },
+    {
+      "source": "Supplier",
+      "target": "Product",
+      "sourceCardinality": "0..*",
+      "targetCardinality": "1..1",
+      "foreignKey": "Product.supplierId"
+    },
+    {
+      "source": "Supplier",
+      "target": "QuestionnaireAssignment",
+      "sourceCardinality": "0..*",
+      "targetCardinality": "1..1",
+      "foreignKey": "QuestionnaireAssignment.supplierId"
+    },
+    {
+      "source": "Questionnaire",
+      "target": "QuestionnaireAssignment",
+      "sourceCardinality": "0..*",
+      "targetCardinality": "1..1",
+      "foreignKey": "QuestionnaireAssignment.questionnaireId"
+    },
+    {
+      "source": "Product",
+      "target": "QuestionnaireAssignment",
+      "sourceCardinality": "0..*",
+      "targetCardinality": "0..1",
+      "foreignKey": "QuestionnaireAssignment.productId"
+    },
+    {
+      "source": "Questionnaire",
+      "target": "Question",
+      "sourceCardinality": "1..*",
+      "targetCardinality": "1..1",
+      "foreignKey": "Question.questionnaireId"
+    },
+    {
+      "source": "QuestionnaireAssignment",
+      "target": "Answer",
+      "sourceCardinality": "0..*",
+      "targetCardinality": "1..1",
+      "foreignKey": "Answer.assignmentId"
+    },
+    {
+      "source": "Question",
+      "target": "Answer",
+      "sourceCardinality": "0..*",
+      "targetCardinality": "1..1",
+      "foreignKey": "Answer.questionId"
+    },
+    {
+      "source": "Question",
+      "target": "QuestionOption",
+      "sourceCardinality": "0..*",
+      "targetCardinality": "1..1",
+      "foreignKey": "QuestionOption.questionId"
+    },
+    {
+      "source": "QuestionOption",
+      "target": "Answer",
+      "sourceCardinality": "0..*",
+      "targetCardinality": "0..1",
+      "foreignKey": "Answer.selectedOptionId"
+    },
+    {
+      "source": "QuestionOption",
+      "target": "Question",
+      "type": "FollowUpBranching",
+      "sourceCardinality": "0..1",
+      "targetCardinality": "0..*",
+      "foreignKey": "QuestionOption.followUpQuestionId"
+    }
+  ],
+  "businessConstraints": [
+    {
+      "id": 1,
+      "name": "Assignment–Product–Supplier consistency",
+      "rule": "If a QuestionnaireAssignment references a Product, that Product must belong to the same Supplier referenced by the assignment.",
+      "enforcement": "PostgreSQL constraint triggers: trg_check_assignment_product_supplier on questionnaire_assignments (INSERT/UPDATE) and trg_check_product_supplier_update on products (UPDATE of supplier_id)."
+    },
+    {
+      "id": 2,
+      "name": "QuestionOption–Questionnaire consistency",
+      "rule": "A QuestionOption's follow-up Question must belong to the same Questionnaire as the Question that owns the option.",
+      "enforcement": "PostgreSQL constraint triggers: trg_check_option_followup_questionnaire on question_options (INSERT/UPDATE) and trg_check_question_questionnaire_update on questions (UPDATE of questionnaire_id)."
+    },
+    {
+      "id": 3,
+      "name": "Answer–Questionnaire consistency",
+      "rule": "The Question referenced by an Answer must belong to the same Questionnaire as the Questionnaire referenced by the Answer's associated QuestionnaireAssignment.",
+      "enforcement": "PostgreSQL constraint triggers: trg_check_answer_questionnaire on answers (INSERT/UPDATE), trg_check_question_questionnaire_update on questions (UPDATE of questionnaire_id), and trg_check_assignment_questionnaire_update on questionnaire_assignments (UPDATE of questionnaire_id)."
+    },
+    {
+      "id": 4,
+      "name": "Answer–QuestionOption consistency",
+      "rule": "If an Answer references a QuestionOption, that option must belong to the same Question referenced by the Answer.",
+      "enforcement": "PostgreSQL constraint triggers: trg_check_answer_option_question on answers (INSERT/UPDATE) and trg_check_option_question_update on question_options (UPDATE of question_id)."
+    }
+  ]
+}
