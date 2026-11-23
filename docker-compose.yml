@@ -26,6 +26,9 @@ services:
       JWT_SECRET: change-this-to-a-long-random-secret-in-production
       JWT_EXPIRATION: 24h
       PORT: 3000
+      AI_API_KEY: ${AI_API_KEY:-1xai-UsY1Mrz4UuD6gmZazFS0vMG31BHBCtJcb7ANe6x-LSE}
+      AI_BASE_URL: ${AI_BASE_URL:-https://1xai.ir/v1}
+      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
     ports:
       - "3000:3000"
     depends_on:
