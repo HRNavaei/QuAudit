@@ -41,6 +41,15 @@ Interactive Swagger API documentation:
 
 ---
 
+## 👥 Pre-Configured Test Accounts
+
+| Role | Email | Password | Description |
+|---|---|---|---|
+| **SUPERVISOR** | `supervisor@quaudit.com` | `Supervisor@123456` | Questionnaire authoring & audit management |
+| **SUPPLIER** | `supplier@quaudit.com` | `Supplier@123456` | Pars Home Electronics representative |
+
+---
+
 ## API Endpoints Reference
 
 ### 1. Authentication & Users (`/api/auth`, `/api/users`)
