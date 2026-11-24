@@ -17,7 +17,15 @@ export class AuthService {
   ) {}
 
   async validateUser(email: string, pass: string): Promise<User | null> {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const normalizedEmail = email?.trim().toLowerCase();
+    const user = await this.prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: 'insensitive',
+        },
+      },
+    });
     if (!user) return null;
     const passwordValid = await argon2.verify(user.password, pass);
     return passwordValid ? user : null;
@@ -31,8 +39,14 @@ export class AuthService {
   }
 
   async register(data: RegisterDto) {
-    const existing = await this.prisma.user.findUnique({
-      where: { email: data.email },
+    const normalizedEmail = data.email?.trim().toLowerCase();
+    const existing = await this.prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: 'insensitive',
+        },
+      },
     });
     if (existing) {
       throw new ConflictException("A user with this email already exists");
@@ -45,7 +59,7 @@ export class AuthService {
     const { user, supplier } = await this.prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
         data: {
-          email: data.email,
+          email: normalizedEmail,
           password: hashed,
           firstName: data.firstName,
           lastName: data.lastName,
