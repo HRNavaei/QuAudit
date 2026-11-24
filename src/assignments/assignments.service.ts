@@ -289,14 +289,6 @@ export class AssignmentsService {
         }
       }
 
-      // Automatically transition from PENDING to IN_PROGRESS upon saving answers
-      if (assignment.status === AssignmentStatus.PENDING) {
-        await tx.questionnaireAssignment.update({
-          where: { id: assignmentId },
-          data: { status: AssignmentStatus.IN_PROGRESS },
-        });
-      }
-
       // Clean up orphaned answers on inactive/hidden branches
       const allAssignmentAnswers = await tx.answer.findMany({ where: { assignmentId } });
       const visibleIds = this.getVisibleQuestionIds(assignment.questionnaire.questions, allAssignmentAnswers);
@@ -427,33 +419,9 @@ export class AssignmentsService {
   }
 
   async reopenAssignment(assignmentId: string) {
-    const assignment = await this.prisma.questionnaireAssignment.findUnique({
-      where: { id: assignmentId },
-      include: { supplier: true, questionnaire: true },
-    });
-
-    if (!assignment) {
-      throw new NotFoundException(`Assignment with ID ${assignmentId} not found`);
-    }
-
-    const updated = await this.prisma.questionnaireAssignment.update({
-      where: { id: assignmentId },
-      data: {
-        status: AssignmentStatus.IN_PROGRESS,
-        submittedAt: null,
-      },
-    });
-
-    // Notify supplier that assignment was re-opened
-    await this.notificationsService.createNotification({
-      senderId: assignment.questionnaire.createdById,
-      receiverId: assignment.supplier.userId,
-      title: "Questionnaire Re-opened",
-      message: `Your assignment for "${assignment.questionnaire.title}" has been re-opened for resubmission.`,
-      type: "REOPENED",
-    });
-
-    return updated;
+    throw new BadRequestException(
+      'Reopening submitted questionnaires is permanently disabled. Audit responses are immutable compliance records.',
+    );
   }
 
   async deleteAssignment(id: string) {
