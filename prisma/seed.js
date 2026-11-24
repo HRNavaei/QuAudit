@@ -37,29 +37,78 @@ const client_1 = require("@prisma/client");
 const argon2 = __importStar(require("argon2"));
 const prisma = new client_1.PrismaClient();
 async function main() {
-    const adminEmail = process.env.SEED_ADMIN_EMAIL || 'admin@quaudit.com';
-    const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'Admin@123456';
-    const firstName = process.env.SEED_ADMIN_FIRST_NAME || 'System';
-    const lastName = process.env.SEED_ADMIN_LAST_NAME || 'Admin';
-    const existingAdmin = await prisma.user.findUnique({
-        where: { email: adminEmail },
+    // 1. Seed Supervisor User
+    const supervisorEmail = process.env.SEED_SUPERVISOR_EMAIL || 'supervisor@quaudit.com';
+    const supervisorPassword = process.env.SEED_SUPERVISOR_PASSWORD || 'Supervisor@123456';
+    const supervisorFirstName = process.env.SEED_SUPERVISOR_FIRST_NAME || 'Audit';
+    const supervisorLastName = process.env.SEED_SUPERVISOR_LAST_NAME || 'Supervisor';
+    const existingSupervisor = await prisma.user.findUnique({
+        where: { email: supervisorEmail },
     });
-    if (!existingAdmin) {
-        const hashedPassword = await argon2.hash(adminPassword);
+    if (!existingSupervisor) {
+        const hashedPassword = await argon2.hash(supervisorPassword);
         await prisma.user.create({
             data: {
-                email: adminEmail,
+                email: supervisorEmail,
                 password: hashedPassword,
-                firstName,
-                lastName,
-                role: client_1.Role.ADMIN,
+                firstName: supervisorFirstName,
+                lastName: supervisorLastName,
+                role: client_1.Role.SUPERVISOR,
                 isActive: true,
             },
         });
-        console.log(`Seeded admin user: ${adminEmail}`);
+        console.log(`Seeded supervisor user: ${supervisorEmail}`);
     }
     else {
-        console.log(`Admin user already exists: ${adminEmail}`);
+        console.log(`Supervisor user already exists: ${supervisorEmail}`);
+    }
+    // 2. Seed Supplier User and Supplier Record
+    const supplierEmail = process.env.SEED_SUPPLIER_EMAIL || 'supplier@quaudit.com';
+    const supplierPassword = process.env.SEED_SUPPLIER_PASSWORD || 'Supplier@123456';
+    const supplierFirstName = 'Pars';
+    const supplierLastName = 'Supplier';
+    const existingSupplierUser = await prisma.user.findUnique({
+        where: { email: supplierEmail },
+        include: { supplier: true },
+    });
+    if (!existingSupplierUser) {
+        const hashedPassword = await argon2.hash(supplierPassword);
+        await prisma.user.create({
+            data: {
+                email: supplierEmail,
+                password: hashedPassword,
+                firstName: supplierFirstName,
+                lastName: supplierLastName,
+                role: client_1.Role.SUPPLIER,
+                isActive: true,
+                supplier: {
+                    create: {
+                        companyName: 'Pars Home Electronics',
+                        description: 'Home appliances and electronics manufacturing',
+                        address: 'Tehran, Iran',
+                        phone: '+98 21 8888 0000',
+                        isApproved: true,
+                    },
+                },
+            },
+        });
+        console.log(`Seeded supplier user and profile: ${supplierEmail}`);
+    }
+    else {
+        console.log(`Supplier user already exists: ${supplierEmail}`);
+        if (!existingSupplierUser.supplier) {
+            await prisma.supplier.create({
+                data: {
+                    userId: existingSupplierUser.id,
+                    companyName: 'Pars Home Electronics',
+                    description: 'Home appliances and electronics manufacturing',
+                    address: 'Tehran, Iran',
+                    phone: '+98 21 8888 0000',
+                    isApproved: true,
+                },
+            });
+            console.log(`Created supplier profile for existing user: ${supplierEmail}`);
+        }
     }
 }
 main()
